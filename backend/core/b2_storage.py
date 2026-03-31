@@ -39,11 +39,24 @@ def _is_configured() -> bool:
 
 def _get_client():
     """Create a boto3 S3 client for Backblaze B2."""
+    from botocore.client import Config
+    import urllib.parse
+    
+    region_name = "us-west-004" # Default fallback
+    if settings.B2_ENDPOINT:
+        # Extract region from endpoint (e.g. https://s3.us-west-004.backblazeb2.com -> us-west-004)
+        parsed = urllib.parse.urlparse(settings.B2_ENDPOINT)
+        parts = parsed.netloc.split('.')
+        if len(parts) >= 2 and parts[0] == 's3':
+            region_name = parts[1]
+
     return boto3.client(
         "s3",
         endpoint_url=settings.B2_ENDPOINT,
         aws_access_key_id=settings.B2_KEY_ID,
         aws_secret_access_key=settings.B2_APP_KEY,
+        region_name=region_name,
+        config=Config(signature_version='s3v4'),
     )
 
 

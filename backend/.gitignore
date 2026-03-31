@@ -8,3 +8,7 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Uploads contents (keep the directory)
+uploads/*
+!uploads/.gitkeep
