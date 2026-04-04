@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    MAX_FILE_SIZE_MB: int = 10
+    MAX_FILE_SIZE_MB: int = 100
     MAX_FILES_PER_UPLOAD: int = 20
     CLEANUP_TTL_SECONDS: int = 3600
     UPLOAD_DIR: str = "uploads"

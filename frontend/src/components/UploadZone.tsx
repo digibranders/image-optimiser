@@ -27,7 +27,7 @@ export function UploadZone({ onFilesSelected, isDisabled }: UploadZoneProps) {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: ACCEPTED_TYPES,
-    maxSize: 10 * 1024 * 1024, // 10MB
+    maxSize: 100 * 1024 * 1024, // 100MB
     maxFiles: 20,
     disabled: isDisabled,
   });
@@ -60,7 +60,7 @@ export function UploadZone({ onFilesSelected, isDisabled }: UploadZoneProps) {
               Drag & drop images here, or click to browse
             </p>
             <p className="text-sm text-gray-500">
-              JPEG, PNG, WebP, GIF, TIFF — up to 10MB each, 20 files max
+              JPEG, PNG, WebP, GIF, TIFF — up to 100MB each, 20 files max
             </p>
           </>
         )}

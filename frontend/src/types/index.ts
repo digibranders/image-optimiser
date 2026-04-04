@@ -41,3 +41,16 @@ export interface FolderNode {
   format?: string;
   children?: FolderNode[];
 }
+
+export interface FolderFileRef {
+  jobId: string;
+  originalName: string;
+  variant: VariantResult;
+}
+
+export interface UserFolder {
+  id: string;
+  name: string;
+  files: FolderFileRef[];
+  subfolders: UserFolder[];
+}

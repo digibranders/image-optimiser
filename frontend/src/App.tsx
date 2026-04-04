@@ -6,6 +6,7 @@ import { ResultsGrid } from "./components/ResultsGrid";
 import { FolderTree } from "./components/FolderTree";
 import { StagedImageCard } from "./components/StagedImageCard";
 import type { StagedImage } from "./components/StagedImageCard";
+import type { UserFolder, FolderFileRef } from "./types";
 import { useUpload } from "./hooks/useUpload";
 import { useJobPolling } from "./hooks/useJobPolling";
 
@@ -18,7 +19,24 @@ function App() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [stagedImages, setStagedImages] = useState<StagedImage[]>([]);
+  const [userFolders, setUserFolders] = useState<UserFolder[]>(() => {
+    try {
+      const saved = localStorage.getItem("image-optimizer-folders");
+      return saved ? (JSON.parse(saved) as UserFolder[]) : [];
+    } catch {
+      return [];
+    }
+  });
   const addMoreRef = useRef<HTMLInputElement>(null);
+
+  // Persist folders to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem("image-optimizer-folders", JSON.stringify(userFolders));
+    } catch {
+      // Ignore quota errors
+    }
+  }, [userFolders]);
 
   const { upload, uploadProgress, isUploading, error: uploadError } = useUpload();
   const { jobStatus, isPolling, error: pollError, startPolling, reset: resetPolling } = useJobPolling();
@@ -49,7 +67,7 @@ function App() {
         file,
         preview,
         dimensions: dims.width > 0 ? dims : null,
-        resolution: null,
+        resolution: dims.width > 0 ? { width: dims.width, height: dims.height } : null,
       });
     }
 
@@ -145,6 +163,89 @@ function App() {
     }
   }, [jobStatus, pollError, appState]);
 
+  // ── Recursive folder tree helpers ──────────────────────────────────────────
+  function updateFolderById(
+    folders: UserFolder[],
+    id: string,
+    updater: (f: UserFolder) => UserFolder
+  ): UserFolder[] {
+    return folders.map((f) => {
+      if (f.id === id) return updater(f);
+      return { ...f, subfolders: updateFolderById(f.subfolders, id, updater) };
+    });
+  }
+
+  function deleteFolderById(folders: UserFolder[], id: string): UserFolder[] {
+    return folders
+      .filter((f) => f.id !== id)
+      .map((f) => ({ ...f, subfolders: deleteFolderById(f.subfolders, id) }));
+  }
+
+  function collectFolderIdsWithVariant(folders: UserFolder[], filename: string): string[] {
+    return folders.flatMap((f) => [
+      ...(f.files.some((file) => file.variant.filename === filename) ? [f.id] : []),
+      ...collectFolderIdsWithVariant(f.subfolders, filename),
+    ]);
+  }
+  // ───────────────────────────────────────────────────────────────────────────
+
+  // Folder management handlers
+  const createFolder = useCallback((name: string): string => {
+    const trimmed = name.trim();
+    if (!trimmed) return "";
+    const id = crypto.randomUUID();
+    setUserFolders((prev) => [...prev, { id, name: trimmed, files: [], subfolders: [] }]);
+    return id;
+  }, []);
+
+  const createSubfolder = useCallback((parentId: string, name: string): string => {
+    const trimmed = name.trim();
+    if (!trimmed) return "";
+    const id = crypto.randomUUID();
+    setUserFolders((prev) =>
+      updateFolderById(prev, parentId, (f) => ({
+        ...f,
+        subfolders: [...f.subfolders, { id, name: trimmed, files: [], subfolders: [] }],
+      }))
+    );
+    return id;
+  }, []);
+
+  const renameFolder = useCallback((folderId: string, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    setUserFolders((prev) =>
+      updateFolderById(prev, folderId, (f) => ({ ...f, name: trimmed }))
+    );
+  }, []);
+
+  const deleteFolder = useCallback((folderId: string) => {
+    setUserFolders((prev) => deleteFolderById(prev, folderId));
+  }, []);
+
+  const moveToFolder = useCallback((folderId: string, ref: FolderFileRef) => {
+    setUserFolders((prev) =>
+      updateFolderById(prev, folderId, (f) => {
+        if (f.files.some((file) => file.variant.filename === ref.variant.filename)) return f;
+        return { ...f, files: [...f.files, ref] };
+      })
+    );
+  }, []);
+
+  const removeFromFolder = useCallback((folderId: string, variantFilename: string) => {
+    setUserFolders((prev) =>
+      updateFolderById(prev, folderId, (f) => ({
+        ...f,
+        files: f.files.filter((file) => file.variant.filename !== variantFilename),
+      }))
+    );
+  }, []);
+
+  const getFoldersForVariant = useCallback(
+    (variantFilename: string): string[] => collectFolderIdsWithVariant(userFolders, variantFilename),
+    [userFolders]
+  );
+
   const handleReset = () => {
     // Revoke all preview URLs
     stagedImages.forEach((img) => URL.revokeObjectURL(img.preview));
@@ -152,6 +253,7 @@ function App() {
     setJobId(null);
     setErrorMessage(null);
     setStagedImages([]);
+    setUserFolders([]);
     resetPolling();
   };
 
@@ -363,11 +465,27 @@ function App() {
             />
             <div className="flex gap-6">
               <div className="flex-1 min-w-0">
-                <ResultsGrid results={jobStatus.results} jobId={jobId} />
+                <ResultsGrid
+                  results={jobStatus.results}
+                  jobId={jobId}
+                  userFolders={userFolders}
+                  onCreateFolder={createFolder}
+                  onMoveToFolder={moveToFolder}
+                  getFoldersForVariant={getFoldersForVariant}
+                />
               </div>
               <div className="w-72 flex-shrink-0 hidden lg:block">
                 <div className="sticky top-6">
-                  <FolderTree results={jobStatus.results} jobId={jobId} />
+                  <FolderTree
+                    results={jobStatus.results}
+                    jobId={jobId}
+                    userFolders={userFolders}
+                    onCreateFolder={createFolder}
+                    onCreateSubfolder={createSubfolder}
+                    onRenameFolder={renameFolder}
+                    onDeleteFolder={deleteFolder}
+                    onRemoveFromFolder={removeFromFolder}
+                  />
                 </div>
               </div>
             </div>

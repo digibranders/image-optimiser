@@ -1,15 +1,20 @@
 import { useState } from "react";
-import type { ImageResult, VariantResult } from "../types";
+import type { ImageResult, VariantResult, UserFolder, FolderFileRef } from "../types";
 import { FormatBadge, formatBytes } from "./FormatBadge";
 import { ComparisonSlider } from "./ComparisonSlider";
+import { MoveToFolderDropdown } from "./MoveToFolderDropdown";
 import { getDownloadUrl } from "../api/client";
 
 interface ImageCardProps {
   result: ImageResult;
   jobId: string;
+  userFolders: UserFolder[];
+  onCreateFolder: (name: string) => string;
+  onMoveToFolder: (folderId: string, ref: FolderFileRef) => void;
+  getFoldersForVariant: (variantFilename: string) => string[];
 }
 
-export function ImageCard({ result, jobId }: ImageCardProps) {
+export function ImageCard({ result, jobId, userFolders, onCreateFolder, onMoveToFolder, getFoldersForVariant }: ImageCardProps) {
   // Get available size labels
   const sizes = [...new Set(result.variants.map((v) => v.size_label))];
   const defaultSize = sizes.includes("original") ? "original" : sizes[0] || "original";
@@ -98,20 +103,30 @@ export function ImageCard({ result, jobId }: ImageCardProps) {
           ))}
         </div>
 
-        {/* Download buttons for all formats */}
+        {/* Download buttons + Move to Folder */}
         <div className="flex flex-wrap gap-2">
           {filteredVariants.map((variant) => (
-            <a
-              key={`dl-${variant.filename}`}
-              href={getDownloadUrl(jobId, variant.filename)}
-              download
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors bg-white text-gray-700 border border-gray-200 hover:bg-blue-600 hover:text-white hover:border-blue-600"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              {variant.format.toUpperCase()} ({formatBytes(variant.file_size)})
-            </a>
+            <div key={`dl-${variant.filename}`} className="flex items-center gap-1">
+              <a
+                href={getDownloadUrl(jobId, variant.filename)}
+                download
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors bg-white text-gray-700 border border-gray-200 hover:bg-blue-600 hover:text-white hover:border-blue-600"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                {variant.format.toUpperCase()} ({formatBytes(variant.file_size)})
+              </a>
+              <MoveToFolderDropdown
+                variant={variant}
+                jobId={jobId}
+                originalName={result.original_name}
+                userFolders={userFolders}
+                assignedFolderIds={getFoldersForVariant(variant.filename)}
+                onMoveToFolder={onMoveToFolder}
+                onCreateFolder={onCreateFolder}
+              />
+            </div>
           ))}
         </div>
       </div>
